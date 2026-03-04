@@ -1,0 +1,176 @@
+<!DOCTYPE html>
+<html lang="zh-TW">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>大帥哥官方 - 旗艦雲端商城</title>
+    <script src="https://www.gstatic.com/firebasejs/9.6.1/firebase-app-compat.js"></script>
+    <script src="https://www.gstatic.com/firebasejs/9.6.1/firebase-database-compat.js"></script>
+    <style>
+        :root { --primary: #1976d2; --admin: #d32f2f; --bg: #f8f9fa; }
+        body { font-family: "Microsoft JhengHei", sans-serif; background: var(--bg); margin: 0; padding-bottom: 60px; }
+        nav { background: var(--primary); color: white; padding: 10px 15px; display: flex; justify-content: space-between; align-items: center; sticky; top: 0; z-index: 1000; box-shadow: 0 2px 5px rgba(0,0,0,0.1); }
+        nav.is-admin { background: var(--admin); }
+        .nav-group { display: flex; gap: 8px; }
+        .nav-btn { background: rgba(255,255,255,0.2); color: white; border: none; padding: 6px 10px; border-radius: 4px; font-size: 13px; cursor: pointer; }
+        .content { padding: 15px; max-width: 800px; margin: auto; }
+        .page { display: none; }
+        .page.active { display: block; }
+        .card { background: white; padding: 15px; border-radius: 12px; box-shadow: 0 2px 8px rgba(0,0,0,0.05); margin-bottom: 15px; }
+        input, textarea { padding: 12px; border: 1px solid #ddd; border-radius: 8px; width: 100%; box-sizing: border-box; margin-bottom: 10px; }
+        .btn { padding: 12px; border: none; border-radius: 8px; cursor: pointer; font-weight: bold; width: 100%; color: white; }
+        .product-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(150px, 1fr)); gap: 10px; }
+        .p-img { width: 100%; height: 120px; object-fit: cover; border-radius: 8px; }
+    </style>
+</head>
+<body>
+
+<div id="auth-overlay" style="position:fixed;top:0;left:0;width:100%;height:100%;background:var(--primary);display:flex;justify-content:center;align-items:center;z-index:2000;">
+    <div style="background:white;padding:30px;border-radius:20px;width:280px;text-align:center;">
+        <h2>💎 大帥哥商城</h2>
+        <input type="text" id="u-in" placeholder="帳號">
+        <input type="password" id="p-in" placeholder="密碼">
+        <button class="btn" style="background:var(--primary)" onclick="doAuth()">進入商店</button>
+    </div>
+</div>
+
+<div id="app" style="display:none;">
+    <nav id="navbar">
+        <div id="user-display" style="font-weight:bold; font-size:14px;"></div>
+        <div class="nav-group">
+            <button class="nav-btn" onclick="showP('shop')">🛒 商店</button>
+            <button class="nav-btn" onclick="showP('lottery')">🎟️ 抽獎</button>
+            <button id="adm-nav" class="nav-btn" style="display:none;" onclick="showP('admin')">📊 數據</button>
+            <button class="nav-btn" onclick="location.reload()">登出</button>
+        </div>
+    </nav>
+
+    <div class="content">
+        <div id="page-shop" class="page active">
+            <div id="adm-post" class="card" style="display:none; border: 2px solid var(--admin);">
+                <h3 style="color:var(--admin); margin-top:0;">🚀 官方上架</h3>
+                <input type="text" id="pN" placeholder="商品名稱">
+                <input type="number" id="pP" placeholder="價格">
+                <input type="text" id="pI" placeholder="圖片網址">
+                <textarea id="pD" placeholder="商品介紹..."></textarea>
+                <button class="btn" style="background:var(--admin)" onclick="upP()">即時發布</button>
+            </div>
+            <h3>🔥 今日熱賣</h3>
+            <div id="p-list" class="product-grid">載入中...</div>
+        </div>
+
+        <div id="page-lottery" class="page">
+            <div class="card" style="text-align:center;">
+                <h3>🎟️ 幸運大抽獎</h3>
+                <p>剩餘抽獎券：<span id="tk-cnt" style="font-weight:bold; color:red;">0</span></p>
+                <button class="btn" style="background:#ff9800" onclick="draw()">花 1 張券抽獎</button>
+                <div id="draw-res" style="margin-top:15px; font-weight:bold;"></div>
+            </div>
+        </div>
+
+        <div id="page-admin" class="page">
+            <div class="card">
+                <h3>📊 雲端即時日誌</h3>
+                <div id="log-box" style="font-size:12px; line-height:1.6;"></div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<script>
+    const firebaseConfig = { databaseURL: "https://big-handsome-default-rtdb.firebaseio.com/" };
+    firebase.initializeApp(firebaseConfig);
+    const db = firebase.database();
+    let curU = null;
+
+    function doAuth() {
+        const u = document.getElementById('u-in').value.trim();
+        const p = document.getElementById('p-in').value;
+        if(u === "admin" && p === "8888") {
+            curU = { id: "admin", name: "大帥哥官方", role: "admin", tk: 999 };
+            start();
+        } else if(u && p) {
+            db.ref('users/'+u).once('value', s => {
+                const d = s.val();
+                if(!d) {
+                    const nU = { id: u, pass: p, tk: 5, role: "user" };
+                    db.ref('users/'+u).set(nU);
+                    curU = nU;
+                } else if(d.pass === p) { curU = d; }
+                else { return alert("密碼錯了"); }
+                start();
+            });
+        }
+    }
+
+    function start() {
+        document.getElementById('auth-overlay').style.display = 'none';
+        document.getElementById('app').style.display = 'block';
+        document.getElementById('user-display').innerText = curU.name || curU.id;
+        if(curU.role === 'admin') {
+            document.getElementById('adm-nav').style.display = 'block';
+            document.getElementById('adm-post').style.display = 'block';
+            document.getElementById('navbar').classList.add('is-admin');
+        }
+        updateTK();
+        listenP();
+        listenL();
+    }
+
+    function upP() {
+        const n = document.getElementById('pN').value;
+        const p = document.getElementById('pP').value;
+        const i = document.getElementById('pI').value || "https://via.placeholder.com/150";
+        const d = document.getElementById('pD').value;
+        if(n && p) {
+            db.ref('products').push({ n, p, i, d });
+            alert("上架成功！");
+            ["pN","pP","pI","pD"].forEach(id => document.getElementById(id).value = "");
+        }
+    }
+
+    function listenP() {
+        db.ref('products').on('value', s => {
+            const data = s.val();
+            const list = document.getElementById('p-list');
+            list.innerHTML = "";
+            for(let key in data) {
+                const item = data[key];
+                list.innerHTML += `<div class="card" style="padding:10px;">
+                    <img src="${item.i}" class="p-img">
+                    <div style="font-weight:bold;margin:5px 0;">${item.n}</div>
+                    <div style="color:red;font-weight:bold;">$${item.p}</div>
+                    <button class="btn" style="background:#4caf50;padding:5px;margin-top:5px;font-size:12px;" onclick="alert('感謝購買！')">購買</button>
+                    ${curU.role==='admin'? `<button onclick="db.ref('products/${key}').remove()" style="border:none;background:none;color:#999;font-size:10px;">下架</button>` : ''}
+                </div>`;
+            }
+        });
+    }
+
+    function draw() {
+        if(curU.tk <= 0) return alert("沒券了！");
+        curU.tk--;
+        db.ref('users/'+curU.id+'/tk').set(curU.tk);
+        updateTK();
+        const gift = ["大帥哥貼紙", "再接再厲", "隱藏獎品", "九折優惠券"][Math.floor(Math.random()*4)];
+        document.getElementById('draw-res').innerText = "🎉 抽中：" + gift;
+    }
+
+    function updateTK() { document.getElementById('tk-cnt').innerText = curU.tk; }
+
+    function showP(pId) {
+        document.querySelectorAll('.page').forEach(p => p.classList.remove('active'));
+        document.getElementById('page-' + pId).classList.add('active');
+    }
+
+    function listenL() {
+        db.ref('logs').limitToLast(10).on('value', s => {
+            const data = s.val();
+            const box = document.getElementById('log-box');
+            box.innerHTML = "";
+            for(let k in data) box.innerHTML = `<div>• ${data[k].msg}</div>` + box.innerHTML;
+        });
+    }
+</script>
+</body>
+</html>
